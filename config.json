@@ -1,0 +1,20 @@
+{
+    "printers": [
+        {
+            "name": "Pink Prusa Club",
+            "model": "Prusa MK3S",
+            "colour": "#FFFFFF",
+
+            "serial": "usb-Prusa_Research__prusa3d.com__Original_Prusa_i3_MK3_CZPX3422X004XK80199-if00",
+            "baud": 115200
+        },
+        {
+            "name": "Blusa",
+            "model": "Prusa MK3S",
+            "colour": "#5BCEFA",
+
+            "serial": "usb-Prusa_Research__prusa3d.com__Original_Prusa_i3_MK3_CZPX3423X004XK25614-if00",
+            "baud": 115200
+        }
+    ]
+}
