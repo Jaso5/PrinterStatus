@@ -2,10 +2,10 @@ from paho.mqtt.client import Client
 import json
 
 class Status:
-    percent: float | None
-    time_remaining: float | None
+    percent: float | None = None
+    time_remaining: float | None = None
 
-    file_name: str | None
+    file_name: str | None = None
 
     def set_percent(self, v: float) -> bool:
         self.percent = v
@@ -21,10 +21,12 @@ class Status:
     
     def send(self, mqtt: Client, name: str):
         mqtt.publish(f"printers/{name}/status", json.dumps(self))
+        self.percent = None
+        self.time_remaining = None
         
     def check_finished(self) -> bool:
         return (
-            self.percent is not None and
-            self.time_remaining is not None and
-            self.file_name is not None
+            (self.percent is not None) and
+            (self.time_remaining is not None) and
+            (self.file_name is not None)
         )

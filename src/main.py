@@ -3,11 +3,12 @@ import time
 import paho.mqtt.client as mqtt
 import json
 import logging
+from datetime import datetime
 
 from printers.printer import Printer
 
-mqtt = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-mqtt.connect("mqtt.hacklab")
+client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+client.connect("mqtt.hacklab")
 
 logger = logging.getLogger()
 
@@ -28,7 +29,10 @@ def main():
     # Write to log file
     logging.basicConfig(filename='log', level=logging.DEBUG)
     # Write to stderr
-    logging.getLogger().addHandler(logging.StreamHandler())
+    sh = logging.StreamHandler()
+    sh.formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+    logger.addHandler(sh)
+    logger.info(f"START {datetime.now()}")
 
     config_path: str = parse_args()
 
@@ -43,7 +47,7 @@ def main():
     logger.info("Printer init")
 
     for printer_config in config["printers"]:
-        printer = Printer(printer_config)
+        printer = Printer(printer_config, client)
         printer.connect()
         printers.append(printer)
 
