@@ -16,6 +16,7 @@ name = None
 
 printers = []
 
+
 def parse_args():
     p = argparse.ArgumentParser()
 
@@ -23,11 +24,12 @@ def parse_args():
 
     args = p.parse_args()
 
-    return (args.config)
+    return args.config
+
 
 def main():
     # Write to log file
-    logging.basicConfig(filename='log', level=logging.DEBUG)
+    logging.basicConfig(filename="log", level=logging.INFO)
     # Write to stderr
     sh = logging.StreamHandler()
     sh.formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
@@ -56,7 +58,6 @@ def main():
     while True:
         time.sleep(10)
 
-        
 
 if __name__ == "__main__":
     main()
