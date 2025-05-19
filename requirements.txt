@@ -1,3 +1,0 @@
-regex >= 2024.11.6
-paho-mqtt >= 2.1.0
-Printrun >= 2.2.0
