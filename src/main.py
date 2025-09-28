@@ -29,7 +29,7 @@ def parse_args():
 
 def main():
     # Write to log file
-    logging.basicConfig(filename="log", level=logging.INFO)
+    logging.basicConfig(filename="log", level=logging.DEBUG)
     # Write to stderr
     sh = logging.StreamHandler()
     sh.formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
