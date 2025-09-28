@@ -21,6 +21,11 @@ class Printer:
     # Status
     connected = False
     paused = False
+    file = "None"
+    cwd = "None"
+
+    # Internal
+    mode = 'n' # n = normal, f = file list
 
     logger: Logger
     packet = Status()
@@ -36,13 +41,13 @@ class Printer:
 
         self.logger = getLogger(self.name)
         self.client = client
-        self.client.publish(f"printers/{self.shortname}/state", "Complete", retain=True)
-        self.client.publish(
+        self.publish(f"printers/{self.shortname}/state", "Complete", retain=True)
+        self.publish(
             f"printers/{self.shortname}/percent_done",
             0,
             retain=True,
         )
-        self.client.publish(
+        self.publish(
             f"printers/{self.shortname}/time_remaining_mins",
             0,
             retain=True,
@@ -75,63 +80,92 @@ class Printer:
     # Recieve callback
     def handle_msg(self, line: str):
         line = line.rstrip("\n")
-        self.logger.debug(f"RECV: {line}")
-        # Print Status echo: 'NORMAL MODE: Percent done: 32; print time remaining in mins: 8; Change in mins: -1'
-        if line[0:11] == "NORMAL MODE":
-            stats: regex.Match[str] = status_regex.search(line)  # type: ignore
-            self.logger.debug(f"{stats.group(1)}, {stats.group(2)}")
+        self.logger.debug(f"M: {self.mode} RECV: {line}")
+        
+        # Normal mode
+        if self.mode == 'n':
+            # Print Status echo: 'NORMAL MODE: Percent done: 32; print time remaining in mins: 8; Change in mins: -1'
+            if line[0:11] == "NORMAL MODE":
+                stats: regex.Match[str] = status_regex.search(line)  # type: ignore
+                self.logger.debug(f"{stats.group(1)}, {stats.group(2)}")
 
-            self.client.publish(
-                f"printers/{self.shortname}/state", "Printing", retain=True
-            )
-            self.client.publish(
-                f"printers/{self.shortname}/percent_done",
-                int(stats.group(1)),
-                retain=True,
-            )
-            self.client.publish(
-                f"printers/{self.shortname}/time_remaining_mins",
-                int(stats.group(2)),
-                retain=True,
-            )
-        # File Start echo: 'echo:enqueing "M23 CALI.G"'
-        elif line[0:13] == "echo:enqueing":
-            self.logger.debug(f"Print starting: {line[19:-1]}")
+                self.publish(
+                    f"printers/{self.shortname}/state",
+                    "Printing",
+                    retain=True
+                )
+                self.publish(
+                    f"printers/{self.shortname}/percent_done",
+                    int(stats.group(1)),
+                    retain=True,
+                )
+                self.publish(
+                    f"printers/{self.shortname}/time_remaining_mins",
+                    int(stats.group(2)),
+                    retain=True,
+                )
 
-            file_name = line[19:-1]
-
-            if len(file_name) > 0:
-                self.client.publish(
+            # File opened: /JACOB/0.4/Cali-Dragon-Tiny_PLA.gcode Size: 467996
+            elif line[0:12] == "File opened:":
+                file_name = line[13:-1].split(" ")[0]
+                self.publish(
                     f"printers/{self.shortname}/state", "Printing", retain=True
                 )
-                self.client.publish(
-                    f"printers/{self.shortname}/file", line[19:-1], retain=True
+                self.publish(
+                    f"printers/{self.shortname}/file", file_name, retain=True
                 )
-        # File Finished: 'Done printing file'
-        elif line == "Done printing file":
-            self.client.publish(
-                f"printers/{self.shortname}/state", "Complete", retain=True
-            )
-            self.client.publish(f"sound/g1/speak", f"Print finished on {self.name}")
+                self.file = file_name
+                self.cwd = '/'.join(file_name.split('/')[0:-2])
 
-        # Print manually paused: '//action:paused'
-        elif line == "//action:paused":
-            self.client.publish(
-                f"printers/{self.shortname}/state", "Paused", retain=True
-            )
-        # Print paused
-        elif line == "//action:paused":
-            self.client.publish(
-                f"printers/{self.shortname}/state", "Cancelled", retain=True
-            )
-        # Print paused automatically
-        elif line == "echo:busy: paused for user" and not self.paused:
-            self.paused = True
+            # File Finished: 'Done printing file'
+            elif line == "Done printing file":
+                self.publish(
+                    f"printers/{self.shortname}/state", "Complete", retain=True
+                )
+                # Get list of files
+                self.printer.send_now("M20 L")
+                self.publish(f"sound/g1/speak", f"Print finished on {self.name}")
 
-            self.client.publish(
-                f"printers/{self.shortname}/state", "Paused", retain=True
-            )
-            self.client.publish(f"sound/g1/speak", f"Print paused on {self.name}")
+            # Print manually paused: '//action:paused'
+            elif line == "//action:paused":
+                self.publish(
+                    f"printers/{self.shortname}/state", "Paused", retain=True
+                )
+
+            # Print paused automatically
+            elif line == "echo:busy: paused for user" and not self.paused:
+                self.paused = True
+
+                self.publish(
+                    f"printers/{self.shortname}/state", "Paused", retain=True
+                )
+                self.client.publish(f"sound/g1/speak", f"Print paused on {self.name}")
+
+            # Print cancelled
+            elif line == "//action:cancel":
+                self.client.publish(
+                    f"printers/{self.shortname}/state", "Cancelled", retain=True
+                )
+
+            elif line[0:15] == "Begin file list":
+                self.mode = 'f'
+            else:
+                self.logger.debug(f"Unknown Recv")
+        
+        # File list mode
+        elif self.mode == 'f':
+            if line == "End file list":
+                self.mode = 'n'
+            elif line[0:len(self.cwd)] == self.cwd:
+                self.logger.debug(f"Matched dir: {line}")
+                _SD_path, _size, long_name = line.split(" ")
+                if long_name[1:18] == "config.discord...":
+                    username = long_name[18:-9]
+
+                    self.publish("irc/send", json.dumps({
+                        "to": "#edinhacklab-things",
+                        "message": f"@{username} print '{self.file}' complete on {self.name}"
+                    }))
 
     def get_firmware_info(self):
         self.logger.debug("SEND: M115 ; firmware info")
@@ -140,3 +174,9 @@ class Printer:
     def get_filename(self):
         self.logger.debug("SEND: M27 C ; filename info")
         self.printer.send_now("M27 C")
+
+    def publish(self, topic: str, payload: str, retain=False):
+        if not self.client.is_connected():
+            self.client.connect("mqtt.hacklab")
+        
+        self.client.publish(topic, payload, retain=retain)
